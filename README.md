@@ -28,5 +28,5 @@ provide Simple Rest Endpoints to use with Service Now
  Just run Container. The Container Exposes port 9090. There is UWSGI behind.
 
 
- ## Deplpoy without Docker
+ ## Deploy without Docker
  In /configs you will find a uwsgi file
