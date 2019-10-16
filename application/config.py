@@ -12,6 +12,9 @@ class BaseConfig():
     APPLY_HEADERS = True  #Set to False if used with NGINX
 
     SPICE_DEBUG = False
+    CMK_SECRET = "97effb6f-a6b3-46d5-8914-73a9cbf42f4c"
+    CMK_USER = "automation"
+    CMK_URL = "http://monsrv/mon/" # until sitename
 
 class ProductionConfig(BaseConfig):
     """

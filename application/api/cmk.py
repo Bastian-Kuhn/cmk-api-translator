@@ -5,8 +5,11 @@ Enpoints
 # pylint: disable=no-self-use
 # pylint: disable=no-member
 # pylint: disable=too-few-public-methods
+import urllib.parse
 from flask import request
 from flask_restplus import Namespace, Resource, fields
+import requests
+from application import app
 
 API = Namespace('cmk')
 
@@ -19,6 +22,66 @@ ACK_DATA = API.model('acknowledgment', {
 })
 
 
+def create_payload(data):
+    """
+    Create a String with URL Payloads to set ACK
+    """
+    payload = {
+        '_ack_comment' : "Ticket: {}".format(data['QUELLEID']),
+        '_secret' : app.config['CMK_SECRET'],
+        '_username' : app.config["CMK_USER"],
+
+    }
+    source_parts = data['ZIELID'].split('|')
+    if len(source_parts) == 2:
+        # Host Down
+        payload['view_name'] = 'hoststatus'
+    elif len(source_parts) == 3:
+        payload['service'] = source_parts[2]
+        payload['view_name'] = 'service'
+        #service down
+    else:
+        raise ValueError("invalid id")
+
+    payload['site'] = source_parts[0]
+    payload['host'] = source_parts[1]
+
+    return "&".join([x+"="+urllib.parse.quote(y) for x, y in payload.items()])
+
+
+@API.route('status/')
+class StatusAPI(Resource):
+    """
+    Status API
+    """
+    @API.expect(ACK_DATA, validate=True)
+    def post(self):
+        """
+        Check if a Error still exists
+        """
+        try:
+            payload_str = create_payload(request.json)
+
+            url = "{url}check_mk/view.py?output_format=json&{pl}".format(url=app.config['CMK_URL'],
+                                                                         pl=payload_str)
+            # The thing is that cmk not has
+            # prober return status codes here,
+            # so we cannot make nothing...
+            response = requests.get(url)
+            json_raw = response.json()
+            data = dict(zip(json_raw[0], json_raw[1]))
+            solved = True
+            if 'service_state' in data:
+                if data['service_state'] != "OK":
+                    solved = False
+            else:
+                if data['host_state'] != "UP":
+                    solved = False
+        except ValueError as msg:
+            return {"status" :str(msg)}, 500
+
+        return {"problem_solved" : solved}, 200
+
 @API.route('ack/')
 class AckApi(Resource):
     """
@@ -28,7 +91,19 @@ class AckApi(Resource):
     @API.expect(ACK_DATA, validate=True)
     def post(self):
         """
-        Create a new subscription
+        Set ACK on Host or Service
         """
-        data = request.json
-        return str(data), 200
+        try:
+            payload_str = create_payload(request.json)
+
+            url = "{url}check_mk/view.py?_ack_sticky=on&_acknowledge=Acknowledge&_do_actions=yes"\
+            "&_do_confirm=yes&_transid=-1&{pl}".format(url=app.config['CMK_URL'],
+                                                       pl=payload_str)
+            # The thing is that cmk not has
+            # prober return status codes here,
+            # so we cannot make nothing...
+            requests.get(url)
+        except ValueError as msg:
+            return {"status" :str(msg)}, 500
+
+        return {"status" : "success"}, 200
