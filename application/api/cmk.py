@@ -7,6 +7,9 @@ Enpoints
 # pylint: disable=too-few-public-methods
 import urllib.parse
 from flask import request
+from flask_httpauth import HTTPBasicAuth
+from werkzeug.security import generate_password_hash, check_password_hash
+
 from flask_restplus import Namespace, Resource, fields
 import requests
 from application import app
@@ -21,6 +24,15 @@ ACK_DATA = API.model('acknowledgment', {
     "ZIELID" : fields.String,
 })
 
+
+AUTH = HTTPBasicAuth()
+
+@AUTH.verify_password
+def verify_password(username, password):
+    if username in app.config['API_USERS']:
+        cfg_password = generate_password_hash(app.config['API_USERS'][username])
+        return check_password_hash(cfg_password, password)
+    return False
 
 def create_payload(data):
     """
@@ -54,7 +66,9 @@ class StatusAPI(Resource):
     """
     Status API
     """
+
     @API.expect(ACK_DATA, validate=True)
+    @AUTH.login_required
     def post(self):
         """
         Check if a Error still exists
@@ -89,6 +103,7 @@ class AckApi(Resource):
     """
 
     @API.expect(ACK_DATA, validate=True)
+    @AUTH.login_required
     def post(self):
         """
         Set ACK on Host or Service

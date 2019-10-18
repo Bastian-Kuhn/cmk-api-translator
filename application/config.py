@@ -15,6 +15,9 @@ class BaseConfig():
     CMK_SECRET = "97effb6f-a6b3-46d5-8914-73a9cbf42f4c"
     CMK_USER = "automation"
     CMK_URL = "http://monsrv/mon/" # until sitename
+    API_USERS = {
+        'test' : 'test'
+    }
 
 class ProductionConfig(BaseConfig):
     """
