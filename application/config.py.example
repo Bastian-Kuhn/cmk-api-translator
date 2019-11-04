@@ -18,6 +18,7 @@ class BaseConfig():
     API_USERS = {
         'test' : 'test'
     }
+    SSL_VERIFY = True
 
 class ProductionConfig(BaseConfig):
     """

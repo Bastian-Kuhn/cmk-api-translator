@@ -81,7 +81,7 @@ class StatusAPI(Resource):
             # The thing is that cmk not has
             # prober return status codes here,
             # so we cannot make nothing...
-            response = requests.get(url)
+            response = requests.get(url, verify=app.config['SSL_VERIFY'])
             json_raw = response.json()
             data = dict(zip(json_raw[0], json_raw[1]))
             solved = True
@@ -117,7 +117,7 @@ class AckApi(Resource):
             # The thing is that cmk not has
             # prober return status codes here,
             # so we cannot make nothing...
-            requests.get(url)
+            requests.get(url, verify=app.config['SSL_VERIFY'])
         except ValueError as msg:
             return {"status" :str(msg)}, 500
 
