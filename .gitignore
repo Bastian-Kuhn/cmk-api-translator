@@ -1,7 +1,6 @@
 *.swp
 application/config.py
 
-*app.wsgi
 *uwsgi.ini
 
 # Byte-compiled / optimized / DLL files

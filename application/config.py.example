@@ -20,6 +20,8 @@ class BaseConfig():
     }
     SSL_VERIFY = True
 
+    MKEVENT_DEAMON_PATH = "/omd/sites/mon/tmp/run/mkeventd/events"
+
 class ProductionConfig(BaseConfig):
     """
     Production Configuration.

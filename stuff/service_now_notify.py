@@ -30,6 +30,7 @@ def main():
     long_plugin_output = ""
 
     if context['NOTIFICATIONTYPE'] == "PROBLEM":
+        api_url += "checkmk/incident/create"
         if context['WHAT'] == "HOST":
             mngmt_pack = {
                 "hostname": host_name,
@@ -63,9 +64,11 @@ def main():
             "LANGBESCHREIBUNG" : long_plugin_output,
         }
     elif context['NOTIFICATIONTYPE'] == "RECOVERY":
+        api_url += "checkmk/incident/close"
         if context['WHAT'] == "HOST":
             source_id = "{}|{}".format(site_name, host_name)
         else:
+            service_name = context['SERVICEDESC']
             source_id = "{}|{}|{}".format(site_name, host_name, service_name)
 
         payload = {
