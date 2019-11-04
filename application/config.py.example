@@ -25,14 +25,14 @@ class ProductionConfig(BaseConfig):
     Production Configuration.
     """
     SESSION_COOKIE_SECURE = True
-    SITENAME = "Subscription API"
+    SITENAME = "CMK API"
     ENABLE_SENTRY = False
 
 class DevelopmentConfig(BaseConfig):
     """
     Development Configuration.
     """
-    SITENAME = "Subscription API DEV"
+    SITENAME = "CMK API DEV"
     TEMPLATE_AUTO_RELOAD = True
     DEBUG = True
     FLASK_DEBUG = True
