@@ -91,7 +91,7 @@ class StatusAPI(Resource):
             else:
                 if data['host_state'] != "UP":
                     solved = False
-        except ValueError as msg:
+        except (ValueError, IndexError) as msg:
             return {"status" :str(msg)}, 500
 
         return {"problem_solved" : solved}, 200
@@ -118,7 +118,7 @@ class AckApi(Resource):
             # prober return status codes here,
             # so we cannot make nothing...
             requests.get(url, verify=app.config['SSL_VERIFY'])
-        except ValueError as msg:
+        except (ValueError, IndexError) as msg:
             return {"status" :str(msg)}, 500
 
         return {"status" : "success"}, 200
