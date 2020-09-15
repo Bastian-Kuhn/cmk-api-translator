@@ -21,6 +21,7 @@ class BaseConfig():
     SSL_VERIFY = True
 
     MKEVENT_DEAMON_PATH = "/omd/sites/mon/tmp/run/mkeventd/events"
+    GRAYLOG_TOKEN = '123' # This Token is used to login to the graylog endpoint with the url parameter
 
 class ProductionConfig(BaseConfig):
     """
