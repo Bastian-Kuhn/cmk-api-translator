@@ -111,7 +111,7 @@ class AckApi(Resource):
         try:
             payload_str = create_payload(request.json)
 
-            url = "{url}check_mk/view.py?_ack_sticky=on&_acknowledge=Acknowledge&_do_actions=yes"\
+            url = "{url}check_mk/view.py?_acknowledge=Acknowledge&_do_actions=yes"\
             "&_do_confirm=yes&_transid=-1&{pl}".format(url=app.config['CMK_URL'],
                                                        pl=payload_str)
             # The thing is that cmk not has
