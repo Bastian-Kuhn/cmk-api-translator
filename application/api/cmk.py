@@ -6,6 +6,7 @@ Enpoints
 # pylint: disable=no-member
 # pylint: disable=too-few-public-methods
 import urllib.parse
+from json.decoder import JSONDecodeError
 from flask import request
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -86,11 +87,13 @@ class StatusAPI(Resource):
             data = dict(zip(json_raw[0], json_raw[1]))
             solved = True
             if 'service_state' in data:
-                if data['service_state'] != "OK":
+                if data['service_state'] != "OK" and data['svc_in_downtime'] == 'no':
                     solved = False
             else:
-                if data['host_state'] != "UP":
+                if data['host_state'] != "UP" and data['host_in_downtime'] == 'no':
                     solved = False
+        except JSONDecodeError:
+            return {"status": str(response.text)}
         except (ValueError, IndexError) as msg:
             return {"status" :str(msg)}, 500
 
