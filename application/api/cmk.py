@@ -51,7 +51,7 @@ def create_payload(data):
         payload['view_name'] = 'hoststatus'
     elif len(source_parts) == 3:
         payload['service'] = source_parts[2]
-        payload['view_name'] = 'service'
+        payload['view_name'] = 'service_snow'
         #service down
     else:
         raise ValueError("invalid id")
@@ -89,6 +89,15 @@ class StatusAPI(Resource):
             if 'service_state' in data:
                 if data['service_state'] != "OK" and data['svc_in_downtime'] == 'no':
                     solved = False
+                if data['host_in_downtime'] == 'yes' or data['svc_in_downtime'] == 'yes':
+                    solved = True
+                    # Now Fake a OK State of the Service in order to have a re notification
+                    # in case the failure still exists after the Downtime (would not be notified
+                    # if failure was before downtime started
+                    url = "{url}check_mk/view.py?_fake_0=OK&_do_actions=yes&_fake_output=API+RESET"\
+                    "&_do_confirm=yes&_transid=-1&{pl}".format(url=app.config['CMK_URL'],
+                                                               pl=payload_str)
+                    requests.get(url, verify=app.config['SSL_VERIFY'])
             else:
                 if data['host_state'] != "UP" and data['host_in_downtime'] == 'no':
                     solved = False
