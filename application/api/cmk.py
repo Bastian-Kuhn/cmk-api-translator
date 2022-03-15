@@ -101,6 +101,12 @@ class StatusAPI(Resource):
             else:
                 if data['host_state'] != "UP" and data['host_in_downtime'] == 'no':
                     solved = False
+                if data['host_in_downtime'] == 'yes':
+                    solved = True
+                    url = "{url}check_mk/view.py?_fake_0=UP&_do_actions=yes&_fake_output=API+RESET"\
+                    "&_do_confirm=yes&_transid=-1&{pl}".format(url=app.config['CMK_URL'],
+                                                               pl=payload_str)
+                    requests.get(url, verify=app.config['SSL_VERIFY'])
         except JSONDecodeError:
             return {"status": str(response.text)}
         except (ValueError, IndexError) as msg:
