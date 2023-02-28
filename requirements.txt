@@ -18,10 +18,10 @@ MarkupSafe==1.1.1
 more-itertools==7.2.0
 pyrsistent==0.15.4
 pytz==2019.3
-requests==2.22.0
+requests
 six==1.12.0
 urllib3==1.26.5
-uWSGI==2.0.18
+#uWSGI==2.0.18
 Werkzeug==0.16.0
 zipp==0.6.0
 python-dateutil==2.8.1
