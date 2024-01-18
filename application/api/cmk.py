@@ -2,7 +2,6 @@
 Enpoints
 """
 # pylint: disable=function-redefined
-# pylint: disable=no-self-use
 # pylint: disable=no-member
 # pylint: disable=too-few-public-methods
 import urllib.parse
@@ -30,6 +29,9 @@ AUTH = HTTPBasicAuth()
 
 @AUTH.verify_password
 def verify_password(username, password):
+    """
+    Verifyh AuthBasic Password
+    """
     if username in app.config['API_USERS']:
         cfg_password = generate_password_hash(app.config['API_USERS'][username])
         return check_password_hash(cfg_password, password)
@@ -57,12 +59,12 @@ def get_job(data):
 
     return job, site, host_name, service_name
 
-def create_payload(data):
+def create_multisite_payload(data):
     """
     Create a String with URL Payloads to set ACK
     """
     payload = {
-        '_ack_comment' : "Ticket: {}".format(data['QUELLEID']),
+        '_ack_comment' : f"Ticket: {data['QUELLEID']}",
         '_secret' : app.config['CMK_SECRET'],
         '_username' : app.config["CMK_USER"],
 
@@ -94,17 +96,17 @@ class StatusAPI(Resource):
     @AUTH.login_required
     def post(self):
         """
-        Check if a Error still exists
+        Check if a Error still exists on a Host or Service,
+        For Events: Archive the Event
         """
         try:
-            payload_str = create_payload(request.json)
+            payload_str = create_multisite_payload(request.json)
 
-            url = "{url}check_mk/view.py?output_format=json&{pl}".format(url=app.config['CMK_URL'],
-                                                                         pl=payload_str)
+            url = f"{app.config['CMK_URL']}check_mk/view.py?output_format=json&{payload_str}"
             # The thing is that cmk not has
             # prober return status codes here,
             # so we cannot make nothing...
-            response = requests.get(url, verify=app.config['SSL_VERIFY'])
+            response = requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
             json_raw = response.json()
             data = dict(zip(json_raw[0], json_raw[1]))
             solved = True
@@ -116,23 +118,22 @@ class StatusAPI(Resource):
                     # Now Fake a OK State of the Service in order to have a re notification
                     # in case the failure still exists after the Downtime (would not be notified
                     # if failure was before downtime started
-                    url = "{url}check_mk/view.py?_fake_0=OK&_do_actions=yes&_fake_output=API+RESET"\
-                    "&_do_confirm=yes&_transid=-1&{pl}".format(url=app.config['CMK_URL'],
-                                                               pl=payload_str)
-                    requests.get(url, verify=app.config['SSL_VERIFY'])
+                    url = f"{app.config['CMK_URL']}check_mk/view.py?_fake_0=OK&_do_actions=yes"\
+                           "&_fake_output=API+RESET"\
+                           "&_do_confirm=yes&_transid=-1&{payload_str}"
+                    requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
             else:
                 if data['host_state'] != "UP" and data['host_in_downtime'] == 'no':
                     solved = False
                 if data['host_in_downtime'] == 'yes':
                     solved = True
-                    url = "{url}check_mk/view.py?_fake_0=UP&_do_actions=yes&_fake_output=API+RESET"\
-                    "&_do_confirm=yes&_transid=-1&{pl}".format(url=app.config['CMK_URL'],
-                                                               pl=payload_str)
-                    requests.get(url, verify=app.config['SSL_VERIFY'])
+                    url = f"{app.config['CMK_URL']}check_mk/view.py?_fake_0=UP&_do_actions=yes"\
+                           "&_fake_output=API+RESET"\
+                           "&_do_confirm=yes&_transid=-1&{payload_str}"
+                    requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
         except JSONDecodeError:
             return {"status": str(response.text)}
         except (ValueError, IndexError) as msg:
-            raise
             return {"status" :str(msg)}, 500
 
         return {"problem_solved" : solved}, 200
@@ -147,11 +148,11 @@ class AckApi(Resource):
     @AUTH.login_required
     def post(self):
         """
-        Set ACK on Host or Service
+        Set ACK on Host, Service or EC Event
         """
         try:
             data = request.json
-            job, site, host, svc = get_job(data)
+            job, _site, host, svc = get_job(data)
 
 
             cmk_url = app.config['CMK_URL']
@@ -175,7 +176,8 @@ class AckApi(Resource):
             headers = {
                 'Authorization': f"Bearer {username} {password}"
             }
-            response = requests.post(url, json=payload, verify=app.config['SSL_VERIFY'], headers=headers)
+            requests.post(url, json=payload, verify=app.config['SSL_VERIFY'],
+                          headers=headers, timeout=20)
         except (ValueError, IndexError) as msg:
             return {"status" :str(msg)}, 500
 
