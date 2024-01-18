@@ -40,5 +40,5 @@ It's also required to configure a login token which will be checked with each re
  Just run Container. The Container Exposes port 9090. There is UWSGI behind.
 
 
- ## Deplpoy without Docker
+ ## Deploy without Docker
  In /configs you will find a uwsgi file
