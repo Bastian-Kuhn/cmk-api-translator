@@ -43,6 +43,8 @@ def get_job(data):
     Determine by API Data what is to do
     """
     source_parts = data['ZIELID'].split('|')
+    if source_parts[0] == "EC":
+        return "EC", source_parts[2], False, False
     job = False
     service_name = False
     if len(source_parts) == 2:
@@ -69,7 +71,6 @@ def create_multisite_payload(data):
         '_username' : app.config["CMK_USER"],
 
     }
-
     job, site, host, svc = get_job(data)
     if job == "host":
         payload['view_name'] = 'hoststatus'
@@ -86,6 +87,59 @@ def create_multisite_payload(data):
     return "&".join([x+"="+urllib.parse.quote(y) for x, y in payload.items()])
 
 
+
+def status_multisite():
+    """
+    Get Status Data from Multisite,
+    also do some Hacks with ACKs etc
+    """
+    try:
+        payload_str = create_multisite_payload(request.json)
+
+        url = f"{app.config['CMK_URL']}check_mk/view.py?output_format=json&{payload_str}"
+        # The thing is that cmk not has
+        # prober return status codes here,
+        # so we cannot make nothing...
+        response = requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
+        json_raw = response.json()
+        data = dict(zip(json_raw[0], json_raw[1]))
+        solved = True
+        if 'service_state' in data:
+            if data['service_state'] != "OK" and data['svc_in_downtime'] == 'no':
+                solved = False
+            if data['host_in_downtime'] == 'yes' or data['svc_in_downtime'] == 'yes':
+                solved = True
+                # Now Fake a OK State of the Service in order to have a re notification
+                # in case the failure still exists after the Downtime (would not be notified
+                # if failure was before downtime started
+                url = f"{app.config['CMK_URL']}check_mk/view.py?_fake_0=OK&_do_actions=yes"\
+                       "&_fake_output=API+RESET"\
+                       "&_do_confirm=yes&_transid=-1&{payload_str}"
+                requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
+        else:
+            if data['host_state'] != "UP" and data['host_in_downtime'] == 'no':
+                solved = False
+            if data['host_in_downtime'] == 'yes':
+                solved = True
+                url = f"{app.config['CMK_URL']}check_mk/view.py?_fake_0=UP&_do_actions=yes"\
+                       "&_fake_output=API+RESET"\
+                       "&_do_confirm=yes&_transid=-1&{payload_str}"
+                requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
+    except JSONDecodeError:
+        return {"status": str(response.text)}
+    except (ValueError, IndexError) as msg:
+        return {"status" :str(msg)}, 500
+
+    return {"problem_solved" : solved}, 200
+
+
+
+def status_ec():
+    """
+    Not sure what todo here
+    """
+    return {"problem_solved" : True}, 200
+
 @API.route('status/')
 class StatusAPI(Resource):
     """
@@ -99,44 +153,10 @@ class StatusAPI(Resource):
         Check if a Error still exists on a Host or Service,
         For Events: Archive the Event
         """
-        try:
-            payload_str = create_multisite_payload(request.json)
-
-            url = f"{app.config['CMK_URL']}check_mk/view.py?output_format=json&{payload_str}"
-            # The thing is that cmk not has
-            # prober return status codes here,
-            # so we cannot make nothing...
-            response = requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
-            json_raw = response.json()
-            data = dict(zip(json_raw[0], json_raw[1]))
-            solved = True
-            if 'service_state' in data:
-                if data['service_state'] != "OK" and data['svc_in_downtime'] == 'no':
-                    solved = False
-                if data['host_in_downtime'] == 'yes' or data['svc_in_downtime'] == 'yes':
-                    solved = True
-                    # Now Fake a OK State of the Service in order to have a re notification
-                    # in case the failure still exists after the Downtime (would not be notified
-                    # if failure was before downtime started
-                    url = f"{app.config['CMK_URL']}check_mk/view.py?_fake_0=OK&_do_actions=yes"\
-                           "&_fake_output=API+RESET"\
-                           "&_do_confirm=yes&_transid=-1&{payload_str}"
-                    requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
-            else:
-                if data['host_state'] != "UP" and data['host_in_downtime'] == 'no':
-                    solved = False
-                if data['host_in_downtime'] == 'yes':
-                    solved = True
-                    url = f"{app.config['CMK_URL']}check_mk/view.py?_fake_0=UP&_do_actions=yes"\
-                           "&_fake_output=API+RESET"\
-                           "&_do_confirm=yes&_transid=-1&{payload_str}"
-                    requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
-        except JSONDecodeError:
-            return {"status": str(response.text)}
-        except (ValueError, IndexError) as msg:
-            return {"status" :str(msg)}, 500
-
-        return {"problem_solved" : solved}, 200
+        job, _site, _host, _svc = get_job(request.json)
+        if job == "EC":
+            return status_ec()
+        return status_multisite()()
 
 @API.route('ack/')
 class AckApi(Resource):
@@ -152,7 +172,7 @@ class AckApi(Resource):
         """
         try:
             data = request.json
-            job, _site, host, svc = get_job(data)
+            job, site, host, svc = get_job(data)
 
 
             cmk_url = app.config['CMK_URL']
@@ -170,6 +190,16 @@ class AckApi(Resource):
                 url = f"{cmk_url}check_mk/api/1.0/domain-types/acknowledge/collections/service"
                 payload['acknowledge_type'] = "service"
                 payload['service_description'] = svc
+            elif job == "EC":
+                url = \
+                  f"{cmk_url}check_mk/api/1.0/objects/event_console/{site}"\
+                   "/actions/update_and_acknowledge/invoke"
+                # On Purpuse we overwrite the Payload here
+                payload = {
+                    'phase': "ack",
+                    'site_id': "sa_mon_ng",
+                    'change_comment':  f"Ticket: {data['QUELLEID']}",
+                }
 
             username = app.config['CMK_USER']
             password = app.config['CMK_SECRET']
