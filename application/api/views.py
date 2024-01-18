@@ -2,7 +2,7 @@
 API Endpoints
 """
 from flask import Blueprint
-from flask_restplus import Api
+from flask_restx import Api
 
 from .cmk import API as cmk
 #from .cmk2 import API as cmk2

@@ -4,7 +4,7 @@
 
 
 ### /api/cmk
-This API Deals with the wired Checkmk Version 1.x API Endpoints to
+This API Deals with the Checkmk API Endpoints to
 provide Simple Rest Endpoints to use with Service Now
 
 Just surf to /api to see all available Endpoints

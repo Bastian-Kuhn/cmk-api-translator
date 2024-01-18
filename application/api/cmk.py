@@ -11,7 +11,7 @@ from flask import request
 from flask_httpauth import HTTPBasicAuth
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from flask_restplus import Namespace, Resource, fields
+from flask_restx import Namespace, Resource, fields
 import requests
 from application import app
 

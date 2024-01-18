@@ -9,7 +9,7 @@ from flask import request
 from datetime import datetime
 from dateutil.parser import parse as time_parse
 
-from flask_restplus import Namespace, Resource, fields
+from flask_restx import Namespace, Resource, fields
 from application import app
 
 API = Namespace('graylog v33')
