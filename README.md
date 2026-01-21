@@ -7,7 +7,12 @@
 This API Deals with the Checkmk API Endpoints to
 provide Simple Rest Endpoints to use with Service Now
 
-Just surf to /api to see all available Endpoints
+UPDATE 21.01.2026:
+The API Endpoints are now a Plugin for the CMDBSycner.
+Just put it to the plugins folder and it will appear there
+
+
+
 
 <img width="834" alt="Bildschirmfoto 2019-10-16 um 22 07 26" src="https://user-images.githubusercontent.com/899110/66955106-ff771900-f061-11e9-8c59-8559bfc4c85c.png">
 

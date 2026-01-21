@@ -8,13 +8,14 @@ import urllib.parse
 from json.decoder import JSONDecodeError
 from flask import request
 from flask_httpauth import HTTPBasicAuth
-from werkzeug.security import generate_password_hash, check_password_hash
+from application.models.user import User
+from application.helpers.get_account import get_account_by_name
 
 from flask_restx import Namespace, Resource, fields
 import requests
 from application import app
 
-API = Namespace('cmk')
+API = Namespace('snow_api')
 
 
 ACK_DATA = API.model('acknowledgment', {
@@ -32,16 +33,18 @@ def verify_password(username, password):
     """
     Verifyh AuthBasic Password
     """
-    if username in app.config['API_USERS']:
-        cfg_password = generate_password_hash(app.config['API_USERS'][username])
-        return check_password_hash(cfg_password, password)
-    return False
+    if user := User.objects.get(name=username):
+        if not user.check_password(password):
+            abort(401, "Invalid login")
+    return True
 
 
 def get_job(data):
     """
     Determine by API Data what is to do
     """
+    account_name = app.config['CMK_ACCOUNT_NAME']
+    config = get_account_by_name(account_name)
     source_parts = data['ZIELID'].split('|')
     if source_parts[0] == "EC":
         return "EC", source_parts[2], False, False
@@ -65,10 +68,12 @@ def create_multisite_payload(data):
     """
     Create a String with URL Payloads to set ACK
     """
+    account_name = app.config['CMK_ACCOUNT_NAME']
+    config = get_account_by_name(account_name)
     payload = {
         '_ack_comment' : f"Ticket: {data['QUELLEID']}",
-        '_secret' : app.config['CMK_SECRET'],
-        '_username' : app.config["CMK_USER"],
+        '_secret' : config['password'],
+        '_username' : config["username"],
 
     }
     job, site, host, svc = get_job(data)
@@ -95,12 +100,13 @@ def status_multisite():
     """
     try:
         payload_str = create_multisite_payload(request.json)
-
-        url = f"{app.config['CMK_URL']}check_mk/view.py?output_format=json&{payload_str}"
+        account_name = app.config['CMK_ACCOUNT_NAME']
+        config = get_account_by_name(account_name)
+        url = f"{config['address']}check_mk/view.py?output_format=json&{payload_str}"
         # The thing is that cmk not has
         # prober return status codes here,
         # so we cannot make nothing...
-        response = requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
+        response = requests.get(url, verify=app.config.get('SSL_VERIFY'), timeout=20)
         json_raw = response.json()
         data = dict(zip(json_raw[0], json_raw[1]))
         solved = True
@@ -112,19 +118,19 @@ def status_multisite():
                 # Now Fake a OK State of the Service in order to have a re notification
                 # in case the failure still exists after the Downtime (would not be notified
                 # if failure was before downtime started
-                url = f"{app.config['CMK_URL']}check_mk/view.py?_fake_0=OK&_do_actions=yes"\
+                url = f"{config['address']}check_mk/view.py?_fake_0=OK&_do_actions=yes"\
                        "&_fake_output=API+RESET"\
                        "&_do_confirm=yes&_transid=-1&{payload_str}"
-                requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
+                requests.get(url, verify=app.config.get('SSL_VERIFY'), timeout=20)
         else:
             if data['host_state'] != "UP" and data['host_in_downtime'] == 'no':
                 solved = False
             if data['host_in_downtime'] == 'yes':
                 solved = True
-                url = f"{app.config['CMK_URL']}check_mk/view.py?_fake_0=UP&_do_actions=yes"\
+                url = f"{app.config.get('CMK_URL')}check_mk/view.py?_fake_0=UP&_do_actions=yes"\
                        "&_fake_output=API+RESET"\
                        "&_do_confirm=yes&_transid=-1&{payload_str}"
-                requests.get(url, verify=app.config['SSL_VERIFY'], timeout=20)
+                requests.get(url, verify=app.config.get('SSL_VERIFY'), timeout=20)
     except JSONDecodeError:
         return {"status": str(response.text)}
     except (ValueError, IndexError) as msg:
@@ -140,7 +146,7 @@ def status_ec():
     """
     return {"problem_solved" : True}, 200
 
-@API.route('status/')
+@API.route('/status/')
 class StatusAPI(Resource):
     """
     Status API
@@ -153,12 +159,15 @@ class StatusAPI(Resource):
         Check if a Error still exists on a Host or Service,
         For Events: Archive the Event
         """
-        job, _site, _host, _svc = get_job(request.json)
-        if job == "EC":
-            return status_ec()
-        return status_multisite()()
+        try:
+            job, _site, _host, _svc = get_job(request.json)
+            if job == "EC":
+                return status_ec()
+            return status_multisite()
+        except (ValueError, IndexError) as msg:
+            return {"status" :str(msg)}, 500
 
-@API.route('ack/')
+@API.route('/ack/')
 class AckApi(Resource):
     """
     Acknowledgement API
@@ -174,8 +183,10 @@ class AckApi(Resource):
             data = request.json
             job, site, host, svc = get_job(data)
 
+            account_name = app.config['CMK_ACCOUNT_NAME']
+            config = get_account_by_name(account_name)
 
-            cmk_url = app.config['CMK_URL']
+            cmk_url = config['address']
             payload = {
               "sticky": False,
               "persistent": False,
@@ -201,12 +212,12 @@ class AckApi(Resource):
                     'change_comment':  f"Ticket: {data['QUELLEID']}",
                 }
 
-            username = app.config['CMK_USER']
-            password = app.config['CMK_SECRET']
+            username = config['username']
+            password = config['password']
             headers = {
                 'Authorization': f"Bearer {username} {password}"
             }
-            requests.post(url, json=payload, verify=app.config['SSL_VERIFY'],
+            requests.post(url, json=payload, verify=app.config.get('SSL_VERIFY'),
                           headers=headers, timeout=20)
         except (ValueError, IndexError) as msg:
             return {"status" :str(msg)}, 500

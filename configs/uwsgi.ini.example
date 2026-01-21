@@ -1,8 +1,0 @@
-[uwsgi]
-plugin = python36
-wsgi-file = /var/www/###DOMAIN###/htdocs/app.wsgi
-chdir = /var/www/###DOMAIN###/htdocs
-processes = 8
-enable-threads = true
-callable = app
-virtualenv = /var/www/###DOMAINS###/htdocs/ENV
