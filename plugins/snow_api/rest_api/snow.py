@@ -108,8 +108,9 @@ def status_multisite():
         # so we cannot make nothing...
         response = requests.get(url, verify=app.config.get('SSL_VERIFY'), timeout=20)
         json_raw = response.json()
+        if not len(json_raw) >= 2:
+            raise ValueError("No Service Response from Checkmk")
         data = dict(zip(json_raw[0], json_raw[1]))
-        solved = True
         if 'service_state' in data:
             if data['service_state'] != "OK" and data['svc_in_downtime'] == 'no':
                 solved = False
@@ -118,18 +119,18 @@ def status_multisite():
                 # Now Fake a OK State of the Service in order to have a re notification
                 # in case the failure still exists after the Downtime (would not be notified
                 # if failure was before downtime started
-                url = f"{config['address']}check_mk/view.py?_fake_0=OK&_do_actions=yes"\
+                url = f"{config['address']}check_mk/view.py?_fake_check_result=Fake+check+result&_do_actions=yes"\
                        "&_fake_output=API+RESET"\
-                       "&_do_confirm=yes&_transid=-1&{payload_str}"
+                       f"&_do_confirm=yes&_transid=-1&{payload_str}"
                 requests.get(url, verify=app.config.get('SSL_VERIFY'), timeout=20)
         else:
             if data['host_state'] != "UP" and data['host_in_downtime'] == 'no':
                 solved = False
             if data['host_in_downtime'] == 'yes':
                 solved = True
-                url = f"{app.config.get('CMK_URL')}check_mk/view.py?_fake_0=UP&_do_actions=yes"\
+                url = f"{config['address']}check_mk/view.py?_fake_check_result=Fake+check+result&_do_actions=yes"\
                        "&_fake_output=API+RESET"\
-                       "&_do_confirm=yes&_transid=-1&{payload_str}"
+                       f"&_do_confirm=yes&_transid=-1&{payload_str}"
                 requests.get(url, verify=app.config.get('SSL_VERIFY'), timeout=20)
     except JSONDecodeError:
         return {"status": str(response.text)}
