@@ -98,6 +98,7 @@ def status_multisite():
     Get Status Data from Multisite,
     also do some Hacks with ACKs etc
     """
+    solved = False
     try:
         payload_str = create_multisite_payload(request.json)
         account_name = app.config['CMK_ACCOUNT_NAME']
