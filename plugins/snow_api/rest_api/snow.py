@@ -8,8 +8,10 @@ import urllib.parse
 from json.decoder import JSONDecodeError
 from flask import request
 from flask_httpauth import HTTPBasicAuth
+from mongoengine.errors import DoesNotExist
 from application.models.user import User
 from application.helpers.get_account import get_account_by_name
+from application import log
 
 from flask_restx import Namespace, Resource, fields
 import requests
@@ -33,9 +35,14 @@ def verify_password(username, password):
     """
     Verifyh AuthBasic Password
     """
-    if user := User.objects.get(name=username):
-        if not user.check_password(password):
-            abort(401, "Invalid login")
+    try:
+        if user := User.objects.get(name=username):
+            if not user.check_password(password):
+                raise ValueError("Invalid Password")
+    except (DoesNotExist, ValueError) as error:
+        log.log("Snow API Login Failed",
+                source="snow_api_translater", details=[('error', f"Problem with {username}: {error}")])
+        return False
     return True
 
 
@@ -98,7 +105,7 @@ def status_multisite():
     Get Status Data from Multisite,
     also do some Hacks with ACKs etc
     """
-    solved = False
+    solved = None
     try:
         payload_str = create_multisite_payload(request.json)
         account_name = app.config['CMK_ACCOUNT_NAME']
@@ -112,9 +119,13 @@ def status_multisite():
         if not len(json_raw) >= 2:
             raise ValueError("No Service Response from Checkmk")
         data = dict(zip(json_raw[0], json_raw[1]))
+        #  {'service_state': 'OK', 'host_in_downtime': 'no', 'svc_in_downtime': 'no'}
         if 'service_state' in data:
             if data['service_state'] != "OK" and data['svc_in_downtime'] == 'no':
                 solved = False
+            elif data['service_state'] == "OK":
+                solved = True
+
             if data['host_in_downtime'] == 'yes' or data['svc_in_downtime'] == 'yes':
                 solved = True
                 # Now Fake a OK State of the Service in order to have a re notification
@@ -127,15 +138,21 @@ def status_multisite():
         else:
             if data['host_state'] != "UP" and data['host_in_downtime'] == 'no':
                 solved = False
+            elif data['host_state'] == "UP":
+                solved = True
             if data['host_in_downtime'] == 'yes':
                 solved = True
                 url = f"{config['address']}check_mk/view.py?_fake_check_result=Fake+check+result&_do_actions=yes"\
                        "&_fake_output=API+RESET"\
                        f"&_do_confirm=yes&_transid=-1&{payload_str}"
                 requests.get(url, verify=app.config.get('SSL_VERIFY'), timeout=20)
-    except JSONDecodeError:
+    except JSONDecodeError as error:
+        log.log("Snow API JSON Exception",
+                source="snow_api_translater", details=[('error', f"{response.text}, {error}")])
         return {"status": str(response.text)}
     except (ValueError, IndexError) as msg:
+        log.log("Snow API Generel Exception",
+                source="snow_api_translater", details=[('error', f"{response.text}, {msg}")])
         return {"status" :str(msg)}, 500
 
     return {"problem_solved" : solved}, 200
@@ -221,7 +238,9 @@ class AckApi(Resource):
             }
             requests.post(url, json=payload, verify=app.config.get('SSL_VERIFY'),
                           headers=headers, timeout=20)
-        except (ValueError, IndexError) as msg:
+        except (ValueError, IndexError, DoesNotExist) as msg:
+            log.log("Snow API Call Failed",
+            source="snow_api_translater", details=[('error', str(msg))])
             return {"status" :str(msg)}, 500
 
         return {"status" : "success"}, 200
